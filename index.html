@@ -570,6 +570,8 @@
     let outputUrl = null;
     let uploadUrl = null;
     let directUploadUrl = null;
+    let uploadBytes = null;
+    let directUploadBytes = null;
 
     copyPromptButton.addEventListener("click", async () => {
       try {
@@ -640,12 +642,21 @@
       }
     });
 
+    downloadUpload.addEventListener("click", (event) => {
+      forceWorkbookDownload(event, uploadBytes, downloadUpload.download);
+    });
+
+    downloadDirectUpload.addEventListener("click", (event) => {
+      forceWorkbookDownload(event, directUploadBytes, downloadDirectUpload.download);
+    });
+
     directUploadFile.addEventListener("change", async () => {
       const file = directUploadFile.files[0];
       directMessage.hidden = true;
       downloadDirectUpload.hidden = true;
       if (directUploadUrl) URL.revokeObjectURL(directUploadUrl);
       directUploadUrl = null;
+      directUploadBytes = null;
 
       if (!file) {
         directWorkbook = null;
@@ -1046,20 +1057,23 @@ ${departmentDescription}
     function renderUploadWorkbook(uploadRows) {
       if (uploadUrl) URL.revokeObjectURL(uploadUrl);
       uploadUrl = null;
+      uploadBytes = null;
 
-      uploadUrl = createUploadWorkbookUrl(uploadRows);
+      uploadBytes = createUploadWorkbookBytes(uploadRows);
+      uploadUrl = bytesToUrl(uploadBytes);
       downloadUpload.href = uploadUrl;
       downloadUpload.hidden = false;
     }
 
     function renderDirectUploadWorkbook(uploadRows) {
       if (directUploadUrl) URL.revokeObjectURL(directUploadUrl);
-      directUploadUrl = createUploadWorkbookUrl(uploadRows);
+      directUploadBytes = createUploadWorkbookBytes(uploadRows);
+      directUploadUrl = bytesToUrl(directUploadBytes);
       downloadDirectUpload.href = directUploadUrl;
       downloadDirectUpload.hidden = false;
     }
 
-    function createUploadWorkbookUrl(uploadRows) {
+    function createUploadWorkbookBytes(uploadRows) {
       const uploadWorksheet = XLSX.utils.json_to_sheet(uploadRows, { header: UPLOAD_COLUMNS });
       const uploadRange = XLSX.utils.decode_range(uploadWorksheet["!ref"]);
       uploadWorksheet["!autofilter"] = { ref: XLSX.utils.encode_range(uploadRange) };
@@ -1068,7 +1082,7 @@ ${departmentDescription}
       }));
       const uploadWorkbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(uploadWorkbook, uploadWorksheet, "Tablib Dataset");
-      return workbookToUrl(uploadWorkbook);
+      return workbookToBytes(uploadWorkbook);
     }
 
     function buildUploadRow(sourceRow, settings) {
@@ -1122,9 +1136,30 @@ ${departmentDescription}
     }
 
     function workbookToUrl(workbook) {
+      return bytesToUrl(workbookToBytes(workbook));
+    }
+
+    function workbookToBytes(workbook) {
       const array = XLSX.write(workbook, { bookType: "xlsx", type: "array", compression: true });
-      const blob = new Blob([new Uint8Array(array)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      return new Uint8Array(array);
+    }
+
+    function bytesToUrl(bytes) {
+      const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       return URL.createObjectURL(blob);
+    }
+
+    function forceWorkbookDownload(event, bytes, filename) {
+      if (!bytes || !bytes.length) return;
+      event.preventDefault();
+      const url = bytesToUrl(bytes);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename || "system_upload.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
     }
 
     function cloneRowWithHeaders(row, headers) {
@@ -1234,6 +1269,7 @@ ${departmentDescription}
       result.hidden = true;
       uploadPanel.hidden = true;
       downloadUpload.hidden = true;
+      uploadBytes = null;
       lastConversion = null;
     }
 
@@ -1242,6 +1278,7 @@ ${departmentDescription}
       if (uploadUrl) URL.revokeObjectURL(uploadUrl);
       outputUrl = null;
       uploadUrl = null;
+      uploadBytes = null;
     }
   </script>
 </body>
