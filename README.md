@@ -1,4 +1,4 @@
-# Wiley 已購買與系所比對工具
+# 書單已購買與系所比對工具
 
 這是純前端 GitHub Pages 小工具。使用者不需要安裝 Python、Docker、App，也不需要 API Key。
 
@@ -6,12 +6,12 @@
 
 工具分成兩個區塊，可以依需求擇一使用。
 
-### 區塊一：Wiley 已購買與系所比對
+### 區塊一：書單已購買與系所比對
 
 1. 開啟 `index.html` 或 GitHub Pages 網址。
-2. 上傳 Wiley 全庫 Excel。
-3. 選擇待比對工作表，預設 `All Live`。
-4. 如果已購買資料在同一個 Excel，選擇已購買工作表，預設 `TAEBDC複本202512`。
+2. 上傳出版社提供的待比對書單 Excel。
+3. 選擇待比對工作表。如果檔案內有 `All Live`，工具會優先選用。
+4. 如果已購買資料在同一個 Excel，選擇已購買工作表。
 5. 如果已購買資料是另一個 Excel，可在「已購買 Excel（選填）」另外上傳。
 6. 輸入學校名稱。
 7. 貼上該校系所或學院描述。
@@ -95,10 +95,10 @@ SDGs(數字前後一定要有逗號)
 
 - 題名：`Title`、`題名`、`書名`
 - 作者：`First Author Full Name`、`作者`、`Author`
-- 出版者：`Imprint`、`出版者`、`Publisher`
+- 出版者：`Imprint`、`出版者`、`Publisher`、`出版社`
 - 出版年：`Copyright Year`、`出版年`、`Year`
-- ISBN：`O-Book ISBN13`、`E-Book ISBN13`、`Print ISBN13`、`O-ISBN_比對`、`ISBN`、`ISBN13`
-- 網址：`URL on Wiley Online Library`、`網址`、`URL`
+- ISBN：`O-Book ISBN13`、`E-Book ISBN13`、`Print ISBN13`、`O-ISBN_比對`、`ISBN`、`ISBN13`、`ISBN-13`、`電子書ISBN`、`紙本ISBN`、`國際標準書號`
+- 網址：`網址`、`URL`、出版社提供的書目網址欄位
 - 主題：`Specialized Subject Area`、`主題`、`Main Subject Category`
 
 ## 單一 Prompt 範本
@@ -106,7 +106,7 @@ SDGs(數字前後一定要有逗號)
 工具畫面會依照你輸入的學校名稱與系所描述自動產生完整 Prompt。下面是固定格式：
 
 ```text
-你是一位圖書館電子書選書與學科分類助理。請把我提供的學校系所描述，整理成可貼回書單比對工具的 CSV，並同時為每個系所產生適合 Wiley 英文書目比對的關鍵字。
+你是一位圖書館電子書選書與學科分類助理。請把我提供的學校系所描述，整理成可貼回書單比對工具的 CSV，並同時為每個系所產生適合出版社書目比對的關鍵字。
 
 重要：請只輸出 CSV，不要 Markdown，不要程式碼區塊，不要任何說明文字。
 
@@ -118,7 +118,7 @@ CSV 輸出規則：
 5. 關鍵字用半形分號 ; 分隔，不要用逗號分隔關鍵字。
 6. 每個系所至少產生 12 個關鍵字。
 7. 關鍵字要包含中文與英文。
-8. 英文關鍵字要包含學科正式名稱、常見書名詞、研究主題詞、Wiley 書目標題或主題分類可能出現的詞。
+8. 英文關鍵字要包含學科正式名稱、常見書名詞、研究主題詞、出版社書目標題、摘要或主題分類可能出現的詞。
 9. 避免太廣泛的單詞，例如 research、introduction、theory、practice、management 不要單獨列入，除非和具體領域組成片語。
 10. 不要加入其他學校的系所。
 11. 不要合併不同系所。

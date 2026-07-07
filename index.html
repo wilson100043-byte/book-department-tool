@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Wiley 書單已購買與系所比對工具</title>
+  <title>書單已購買與系所比對工具</title>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     :root {
@@ -317,7 +317,7 @@
     <header>
       <div>
         <p class="eyebrow">GitHub Pages 純前端工具</p>
-        <h1>Wiley 已購買與系所比對</h1>
+        <h1>書單已購買與系所比對</h1>
       </div>
       <p class="header-note">Excel 只在瀏覽器本機處理，不會上傳伺服器。輸出保留原始欄位，只新增「是否已購買」與「系所」，並設定 Excel 篩選箭頭。</p>
     </header>
@@ -326,9 +326,9 @@
       <section class="panel">
         <form id="matchForm" class="form-grid">
           <label class="wide">
-            <span>Wiley 全庫 Excel</span>
-            <input id="wileyFile" type="file" accept=".xlsx,.xls,.xltx" required>
-            <small>支援你提供的 Wiley 全庫檔，預設待比對工作表為 All Live。</small>
+            <span>待比對書單 Excel</span>
+            <input id="sourceFile" type="file" accept=".xlsx,.xls,.xltx" required>
+            <small>可上傳出版社提供的書單。若檔案內有 All Live 工作表會自動優先選用。</small>
           </label>
 
           <label>
@@ -339,7 +339,7 @@
           <label>
             <span>已購買工作表</span>
             <select id="purchasedSheet"></select>
-            <small>可用同一個 Wiley 檔中的 TAEBDC複本202512，也可在下方另外上傳已購買 Excel。</small>
+            <small>可用同一個書單檔中的已購買工作表，也可在下方另外上傳已購買 Excel。</small>
           </label>
 
           <label>
@@ -402,7 +402,7 @@
             </div>
           </div>
           <div class="actions">
-            <a id="downloadOutput" class="button-link" href="#" download="wiley_已購買與系所比對.xlsx">下載比對結果 Excel</a>
+            <a id="downloadOutput" class="button-link" href="#" download="書單_已購買與系所比對.xlsx">下載比對結果 Excel</a>
           </div>
         </section>
 
@@ -467,7 +467,7 @@
         <label class="wide">
           <span>來源 Excel</span>
           <input id="directUploadFile" type="file" accept=".xlsx,.xls,.xltx">
-          <small>可上傳 Wiley 書單、比對後書單，或已整理好的書目 Excel。</small>
+          <small>可上傳出版社書單、比對後書單，或已整理好的書目 Excel。</small>
         </label>
 
         <label>
@@ -505,9 +505,9 @@
   <script>
     const DEFAULT_TARGET_SHEET = "All Live";
     const DEFAULT_PURCHASED_SHEET = "TAEBDC複本202512";
-    const TARGET_ISBN_COLUMNS = ["O-Book ISBN13", "E-Book ISBN13", "Print ISBN13", "O-ISBN_比對", "ISBN", "ISBN13"];
-    const PURCHASED_ISBN_COLUMNS = ["O-ISBN_比對", "O-Book ISBN13", "E-Book ISBN13", "ISBN", "ISBN13"];
-    const TEXT_COLUMNS = ["Title", "Main Subject Category", "Specialized Subject Area", "主題", "次主題"];
+    const TARGET_ISBN_COLUMNS = ["O-Book ISBN13", "E-Book ISBN13", "Print ISBN13", "O-ISBN_比對", "ISBN", "ISBN13", "ISBN-13", "電子書ISBN", "紙本ISBN", "國際標準書號"];
+    const PURCHASED_ISBN_COLUMNS = ["O-ISBN_比對", "O-Book ISBN13", "E-Book ISBN13", "Print ISBN13", "ISBN", "ISBN13", "ISBN-13", "電子書ISBN", "紙本ISBN", "國際標準書號"];
+    const TEXT_COLUMNS = ["Title", "題名", "書名", "Main Subject Category", "Specialized Subject Area", "主題", "次主題", "Subject", "Category", "Description", "內容簡介"];
     const OUTPUT_ADDED_COLUMNS = ["是否已購買", "系所"];
     const UPLOAD_COLUMNS = [
       "ID",
@@ -536,7 +536,7 @@
     ];
 
     const form = document.querySelector("#matchForm");
-    const wileyFile = document.querySelector("#wileyFile");
+    const sourceFile = document.querySelector("#sourceFile");
     const purchasedFile = document.querySelector("#purchasedFile");
     const schoolCodeInput = document.querySelector("#schoolCode");
     const subjectCodeInput = document.querySelector("#subjectCode");
@@ -563,7 +563,7 @@
     const downloadDirectUpload = document.querySelector("#downloadDirectUpload");
     const directMessage = document.querySelector("#directMessage");
 
-    let wileyWorkbook = null;
+    let sourceWorkbook = null;
     let purchasedWorkbook = null;
     let directWorkbook = null;
     let lastConversion = null;
@@ -580,19 +580,19 @@
       }
     });
 
-    wileyFile.addEventListener("change", async () => {
+    sourceFile.addEventListener("change", async () => {
       hideResult();
-      const file = wileyFile.files[0];
+      const file = sourceFile.files[0];
       if (!file) return;
       try {
-        wileyWorkbook = await readWorkbook(file);
-        populateSelect(targetSheetSelect, wileyWorkbook.SheetNames, DEFAULT_TARGET_SHEET);
+        sourceWorkbook = await readWorkbook(file);
+        populateSelect(targetSheetSelect, sourceWorkbook.SheetNames, DEFAULT_TARGET_SHEET);
         if (!purchasedWorkbook) {
-          populateSelect(purchasedSheetSelect, wileyWorkbook.SheetNames, DEFAULT_PURCHASED_SHEET);
+          populateSelect(purchasedSheetSelect, sourceWorkbook.SheetNames, DEFAULT_PURCHASED_SHEET);
         }
         showMessage("Excel 已載入完成。下一步請輸入學校名稱、貼上系所描述、複製 Prompt 給 AI。", false);
       } catch (error) {
-        wileyWorkbook = null;
+        sourceWorkbook = null;
         showMessage(error.message || "Excel 讀取失敗。", true);
       }
     });
@@ -602,7 +602,7 @@
       const file = purchasedFile.files[0];
       if (!file) {
         purchasedWorkbook = null;
-        if (wileyWorkbook) populateSelect(purchasedSheetSelect, wileyWorkbook.SheetNames, DEFAULT_PURCHASED_SHEET);
+        if (sourceWorkbook) populateSelect(purchasedSheetSelect, sourceWorkbook.SheetNames, DEFAULT_PURCHASED_SHEET);
         return;
       }
       try {
@@ -685,13 +685,13 @@
         if (!window.XLSX) {
           throw new Error("無法載入 Excel 元件，請確認目前網路可連到 CDN 後重新整理頁面。");
         }
-        if (!wileyWorkbook) {
-          const file = wileyFile.files[0];
-          if (!file) throw new Error("請先上傳 Wiley 全庫 Excel。");
-          wileyWorkbook = await readWorkbook(file);
-          populateSelect(targetSheetSelect, wileyWorkbook.SheetNames, DEFAULT_TARGET_SHEET);
+        if (!sourceWorkbook) {
+          const file = sourceFile.files[0];
+          if (!file) throw new Error("請先上傳待比對書單 Excel。");
+          sourceWorkbook = await readWorkbook(file);
+          populateSelect(targetSheetSelect, sourceWorkbook.SheetNames, DEFAULT_TARGET_SHEET);
           if (!purchasedWorkbook) {
-            populateSelect(purchasedSheetSelect, wileyWorkbook.SheetNames, DEFAULT_PURCHASED_SHEET);
+            populateSelect(purchasedSheetSelect, sourceWorkbook.SheetNames, DEFAULT_PURCHASED_SHEET);
           }
         }
 
@@ -706,8 +706,8 @@
         }
 
         const conversion = runMatch({
-          workbook: wileyWorkbook,
-          purchasedWorkbook: purchasedWorkbook || wileyWorkbook,
+          workbook: sourceWorkbook,
+          purchasedWorkbook: purchasedWorkbook || sourceWorkbook,
           targetSheetName: targetSheetSelect.value,
           purchasedSheetName: purchasedSheetSelect.value,
           departmentRules,
@@ -775,7 +775,7 @@
     function buildAiPrompt() {
       const schoolName = cleanText(document.querySelector("#schoolName").value) || "【請填入學校名稱】";
       const departmentDescription = cleanText(sourceDepartmentText.value) || "【請貼上學院、系所清單或自然語言描述】";
-      return `你是一位圖書館電子書選書與學科分類助理。請把我提供的學校系所描述，整理成可貼回書單比對工具的 CSV，並同時為每個系所產生適合 Wiley 英文書目比對的關鍵字。
+      return `你是一位圖書館電子書選書與學科分類助理。請把我提供的學校系所描述，整理成可貼回書單比對工具的 CSV，並同時為每個系所產生適合出版社書目比對的關鍵字。
 
 重要：請只輸出 CSV，不要 Markdown，不要程式碼區塊，不要任何說明文字。
 
@@ -791,7 +791,7 @@ CSV 輸出規則：
    - 學科正式名稱
    - 常見書名詞
    - 研究主題詞
-   - Wiley 書目標題或主題分類可能出現的詞
+   - 出版社書目標題、摘要或主題分類可能出現的詞
 9. 避免太廣泛的單詞，例如 research、introduction、theory、practice、management 不要單獨列入，除非和具體領域組成片語。
 10. 不要加入其他學校的系所。
 11. 不要合併不同系所。
@@ -823,8 +823,8 @@ ${departmentDescription}
     }
 
     function runMatch({ workbook, purchasedWorkbook, targetSheetName, purchasedSheetName, departmentRules }) {
-      const target = readWorksheetRows(workbook, targetSheetName, ["Title", "O-Book ISBN13"]);
-      const purchased = readWorksheetRows(purchasedWorkbook, purchasedSheetName, ["O-ISBN_比對"]);
+      const target = readAnyWorksheetRows(workbook, targetSheetName);
+      const purchased = readAnyWorksheetRows(purchasedWorkbook, purchasedSheetName);
       const purchasedIndex = buildPurchasedIndex(purchased.rows);
       const outputRows = [];
       let purchasedCount = 0;
@@ -884,7 +884,7 @@ ${departmentDescription}
       }
       const sheet = workbook.Sheets[sheetName];
       const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false });
-      let headerRowIndex = detectHeaderRow(matrix, ["Title", "題名", "題名(可大寫可小寫)", "ISBN", "O-Book ISBN13"]);
+      let headerRowIndex = detectHeaderRow(matrix, ["Title", "題名", "題名(可大寫可小寫)", "書名", "ISBN", "ISBN13", "ISBN-13", "O-Book ISBN13", "國際標準書號"]);
       if (headerRowIndex < 0) {
         headerRowIndex = matrix.findIndex((row) => row.some((cell) => cleanText(cell)));
       }
@@ -996,7 +996,9 @@ ${departmentDescription}
     }
 
     function matchDepartments(row, departmentRules) {
-      const haystack = TEXT_COLUMNS.map((column) => cleanText(row[column])).join(" ");
+      const preferredText = TEXT_COLUMNS.map((column) => cleanText(row[column])).filter(Boolean);
+      const allText = Object.values(row).map(cleanText).filter(Boolean);
+      const haystack = Array.from(new Set([...preferredText, ...allText])).join(" ");
       const hits = [];
       departmentRules.forEach((rule) => {
         if (rule.keywords.some((keyword) => keywordMatches(keyword, haystack))) {
@@ -1072,7 +1074,7 @@ ${departmentDescription}
     function buildUploadRow(sourceRow, settings) {
       const title = getRowValue(sourceRow, ["Title", "題名(可大寫可小寫)", "題名", "書名"]);
       const author = getRowValue(sourceRow, ["First Author Full Name", "作者(可大寫可小寫)", "作者", "Author"]);
-      const publisher = getRowValue(sourceRow, ["Imprint", "出版者(可大寫可小寫)", "出版者", "Publisher"]) || "Wiley";
+      const publisher = getRowValue(sourceRow, ["Imprint", "出版者(可大寫可小寫)", "出版者", "Publisher", "出版社"]);
       const year = getRowValue(sourceRow, ["Copyright Year", "出版年", "Year"]);
       const url = getRowValue(sourceRow, ["URL on Wiley Online Library", "網址", "URL"]);
       const subject = getRowValue(sourceRow, [
@@ -1100,6 +1102,10 @@ ${departmentDescription}
           sourceRow["O-ISBN_比對"],
           sourceRow["ISBN"],
           sourceRow["ISBN13"],
+          sourceRow["ISBN-13"],
+          sourceRow["電子書ISBN"],
+          sourceRow["紙本ISBN"],
+          sourceRow["國際標準書號"],
         ], cleanIsbn),
         "資料類型": "",
         "備註": "",

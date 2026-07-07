@@ -1,11 +1,11 @@
-Wiley 已購買與系所比對工具
+書單已購買與系所比對工具
 
-使用方式一：Wiley 已購買與系所比對
+使用方式一：書單已購買與系所比對
 
 1. 用瀏覽器開啟 index.html。
-2. 上傳 Wiley 全庫 Excel，例如 Wiley全庫OnlineBooks_FullList_202601.xltx。
-3. 選擇待比對工作表，預設是 All Live。
-4. 選擇已購買工作表，預設是 TAEBDC複本202512。
+2. 上傳出版社提供的待比對書單 Excel。
+3. 選擇待比對工作表。如果檔案內有 All Live，工具會優先選用。
+4. 選擇已購買工作表。
 5. 如果已購買資料是另一個 Excel，可以在「已購買 Excel（選填）」另外上傳。
 6. 輸入學校名稱。
 7. 貼上該校系所或學院描述。
@@ -51,10 +51,10 @@ AI 回傳格式
 
 - 題名：Title、題名、書名
 - 作者：First Author Full Name、作者、Author
-- 出版者：Imprint、出版者、Publisher
+- 出版者：Imprint、出版者、Publisher、出版社
 - 出版年：Copyright Year、出版年、Year
-- ISBN：O-Book ISBN13、E-Book ISBN13、Print ISBN13、O-ISBN_比對、ISBN、ISBN13
-- 網址：URL on Wiley Online Library、網址、URL
+- ISBN：O-Book ISBN13、E-Book ISBN13、Print ISBN13、O-ISBN_比對、ISBN、ISBN13、ISBN-13、電子書ISBN、紙本ISBN、國際標準書號
+- 網址：網址、URL、出版社提供的書目網址欄位
 - 主題：Specialized Subject Area、主題、Main Subject Category
 
 注意
