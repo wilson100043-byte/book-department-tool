@@ -329,6 +329,24 @@
             <input id="schoolName" type="text" placeholder="淡江大學" required>
           </label>
 
+          <label>
+            <span>學校代碼</span>
+            <input id="schoolCode" type="text" placeholder="例如：TKU" required>
+            <small>用於系統上傳格式。</small>
+          </label>
+
+          <label>
+            <span>主題代碼</span>
+            <input id="subjectCode" type="text" placeholder="例如：EBOOK" required>
+            <small>會自動轉成大寫，只能使用英文字母、數字與底線。</small>
+          </label>
+
+          <label>
+            <span>SDGs</span>
+            <input id="sdgs" type="text" placeholder=",9," required>
+            <small>格式像 ,9, 或 ,9,12,。</small>
+          </label>
+
           <label class="wide">
             <span>貼上學校系所描述（給 AI 用）</span>
             <textarea id="sourceDepartmentText" placeholder="例如：商管學院：企業管理、財務金融、會計、國際企業、保險、經濟、統計與資料科學。工學院：建築、土木、水環、機械與機電、電機、航太、化材。"></textarea>
@@ -379,6 +397,7 @@
           </div>
           <div class="actions">
             <a id="downloadOutput" class="button-link" href="#" download="wiley_已購買與系所比對.xlsx">下載比對結果 Excel</a>
+            <a id="downloadUpload" class="button-link secondary" href="#" download="系統上傳格式_未購買.xlsx">下載系統上傳格式</a>
           </div>
         </section>
       </section>
@@ -389,7 +408,7 @@
           <li>先上傳書單與已購買清單</li>
           <li>貼上系所描述並複製 Prompt</li>
           <li>把 AI 回傳的 CSV 貼回工具</li>
-          <li>按開始後下載 Excel</li>
+          <li>按開始後下載比對結果與系統上傳檔</li>
         </ul>
         <div class="prompt-block">
           <h2>AI 回傳格式</h2>
@@ -397,6 +416,7 @@
             <li>第一列固定：學校名稱、系所名稱、關鍵字</li>
             <li>關鍵字用半形分號 ; 分隔</li>
             <li>同一本書可命中多個系所</li>
+            <li>系統上傳格式只會輸出未購買書目</li>
           </ul>
         </div>
         <pre class="sample">學校名稱,系所名稱,關鍵字
@@ -414,10 +434,38 @@
     const PURCHASED_ISBN_COLUMNS = ["O-ISBN_比對", "O-Book ISBN13", "E-Book ISBN13", "ISBN", "ISBN13"];
     const TEXT_COLUMNS = ["Title", "Main Subject Category", "Specialized Subject Area", "主題", "次主題"];
     const OUTPUT_ADDED_COLUMNS = ["是否已購買", "系所"];
+    const UPLOAD_COLUMNS = [
+      "ID",
+      "學校代碼",
+      "主題代碼(全字母大寫)",
+      "題名(可大寫可小寫)",
+      "作者(可大寫可小寫)",
+      "出版者(可大寫可小寫)",
+      "出版年",
+      "索書號-CCL",
+      "索書號-LC",
+      "索書號-DDC",
+      "索書號-NLM",
+      "ISBN",
+      "資料類型",
+      "備註",
+      "內容簡介",
+      "目次",
+      "pic",
+      "書封網址",
+      "書封來源",
+      "網址",
+      "網址說明",
+      "SDGs(數字前後一定要有逗號)",
+      "主題(英文大小寫皆可，出版社主題若有逗號，請改為 &\n若有多主題以逗號區隔。)",
+    ];
 
     const form = document.querySelector("#matchForm");
     const wileyFile = document.querySelector("#wileyFile");
     const purchasedFile = document.querySelector("#purchasedFile");
+    const schoolCodeInput = document.querySelector("#schoolCode");
+    const subjectCodeInput = document.querySelector("#subjectCode");
+    const sdgsInput = document.querySelector("#sdgs");
     const sourceDepartmentText = document.querySelector("#sourceDepartmentText");
     const copyPromptButton = document.querySelector("#copyPromptButton");
     const targetSheetSelect = document.querySelector("#targetSheet");
@@ -428,10 +476,12 @@
     const message = document.querySelector("#message");
     const result = document.querySelector("#result");
     const downloadOutput = document.querySelector("#downloadOutput");
+    const downloadUpload = document.querySelector("#downloadUpload");
 
     let wileyWorkbook = null;
     let purchasedWorkbook = null;
     let outputUrl = null;
+    let uploadUrl = null;
 
     copyPromptButton.addEventListener("click", async () => {
       try {
@@ -511,6 +561,7 @@
 
         const schoolName = cleanText(document.querySelector("#schoolName").value);
         if (!schoolName) throw new Error("請輸入學校名稱。");
+        const uploadSettings = getUploadSettings();
         const departmentRules = parseDepartmentRules(keywordText.value, schoolName);
         if (!departmentRules.length) {
           throw new Error(`AI 回傳結果找不到「${schoolName}」的資料，請確認 CSV 的學校名稱是否一致。`);
@@ -522,9 +573,10 @@
           targetSheetName: targetSheetSelect.value,
           purchasedSheetName: purchasedSheetSelect.value,
           departmentRules,
+          uploadSettings,
         });
         renderResult(conversion);
-        showMessage("比對完成。輸出 Excel 已設定篩選箭頭，可在 Excel 中篩選是否已購買。", false);
+        showMessage("比對完成。已產生比對結果與系統上傳格式；系統上傳格式只包含未購買書目。", false);
       } catch (error) {
         showMessage(error.message || "比對失敗，請確認檔案與欄位設定。", true);
       } finally {
@@ -617,11 +669,24 @@ ${departmentDescription}
 請直接輸出 CSV。`;
     }
 
-    function runMatch({ workbook, purchasedWorkbook, targetSheetName, purchasedSheetName, departmentRules }) {
+    function getUploadSettings() {
+      const schoolCode = cleanText(schoolCodeInput.value);
+      const subjectCode = cleanText(subjectCodeInput.value).toUpperCase();
+      const sdgs = cleanText(sdgsInput.value);
+      if (!schoolCode) throw new Error("請輸入學校代碼。");
+      if (!subjectCode) throw new Error("請輸入主題代碼。");
+      if (!/^[A-Z0-9_]+$/.test(subjectCode)) throw new Error("主題代碼只能使用英文字母、數字與底線。");
+      if (!/^,(?:\d+,)+$/.test(sdgs)) throw new Error("SDGs 格式必須像 ,9, 或 ,9,12,。");
+      subjectCodeInput.value = subjectCode;
+      return { schoolCode, subjectCode, sdgs };
+    }
+
+    function runMatch({ workbook, purchasedWorkbook, targetSheetName, purchasedSheetName, departmentRules, uploadSettings }) {
       const target = readWorksheetRows(workbook, targetSheetName, ["Title", "O-Book ISBN13"]);
       const purchased = readWorksheetRows(purchasedWorkbook, purchasedSheetName, ["O-ISBN_比對"]);
       const purchasedIndex = buildPurchasedIndex(purchased.rows);
       const outputRows = [];
+      const uploadRows = [];
       let purchasedCount = 0;
       let departmentHitCount = 0;
 
@@ -637,12 +702,14 @@ ${departmentDescription}
         row["是否已購買"] = isPurchased ? "已購買" : "未購買";
         row["系所"] = departments.join("；");
         outputRows.push(row);
+        if (!isPurchased) uploadRows.push(buildUploadRow(sourceRow, uploadSettings));
       });
 
       const outputHeaders = [...target.headers.filter((header) => !OUTPUT_ADDED_COLUMNS.includes(header)), ...OUTPUT_ADDED_COLUMNS];
       return {
         outputRows,
         outputHeaders,
+        uploadRows,
         totalCount: outputRows.length,
         purchasedCount,
         notPurchasedCount: outputRows.length - purchasedCount,
@@ -799,12 +866,51 @@ ${departmentDescription}
       XLSX.utils.book_append_sheet(outputWorkbook, worksheet, "全部比對結果");
       outputUrl = workbookToUrl(outputWorkbook);
 
+      const uploadWorksheet = XLSX.utils.json_to_sheet(conversion.uploadRows, { header: UPLOAD_COLUMNS });
+      const uploadRange = XLSX.utils.decode_range(uploadWorksheet["!ref"]);
+      uploadWorksheet["!autofilter"] = { ref: XLSX.utils.encode_range(uploadRange) };
+      uploadWorksheet["!cols"] = UPLOAD_COLUMNS.map((header) => ({
+        wch: Math.min(Math.max(cleanText(header).length + 2, 12), 34),
+      }));
+      const uploadWorkbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(uploadWorkbook, uploadWorksheet, "Tablib Dataset");
+      uploadUrl = workbookToUrl(uploadWorkbook);
+
       document.querySelector("#totalCount").textContent = conversion.totalCount;
       document.querySelector("#purchasedCount").textContent = conversion.purchasedCount;
       document.querySelector("#notPurchasedCount").textContent = conversion.notPurchasedCount;
       document.querySelector("#departmentCount").textContent = conversion.departmentHitCount;
       downloadOutput.href = outputUrl;
+      downloadUpload.href = uploadUrl;
       result.hidden = false;
+    }
+
+    function buildUploadRow(sourceRow, settings) {
+      return {
+        "ID": "",
+        "學校代碼": settings.schoolCode,
+        "主題代碼(全字母大寫)": settings.subjectCode,
+        "題名(可大寫可小寫)": cleanText(sourceRow["Title"]),
+        "作者(可大寫可小寫)": cleanText(sourceRow["First Author Full Name"]),
+        "出版者(可大寫可小寫)": cleanText(sourceRow["Imprint"]) || "Wiley",
+        "出版年": cleanYear(sourceRow["Copyright Year"]),
+        "索書號-CCL": "",
+        "索書號-LC": "",
+        "索書號-DDC": "",
+        "索書號-NLM": "",
+        "ISBN": firstCleanValue([sourceRow["O-Book ISBN13"], sourceRow["E-Book ISBN13"], sourceRow["Print ISBN13"], sourceRow["ISBN"]], cleanIsbn),
+        "資料類型": "",
+        "備註": "",
+        "內容簡介": "",
+        "目次": "",
+        "pic": "",
+        "書封網址": "",
+        "書封來源": "",
+        "網址": cleanText(sourceRow["URL on Wiley Online Library"]),
+        "網址說明": "",
+        "SDGs(數字前後一定要有逗號)": settings.sdgs,
+        "主題(英文大小寫皆可，出版社主題若有逗號，請改為 &\n若有多主題以逗號區隔。)": cleanUploadSubject(sourceRow["Specialized Subject Area"]),
+      };
     }
 
     function workbookToUrl(workbook) {
@@ -826,6 +932,41 @@ ${departmentDescription}
       const text = String(value).replace(/^\ufeff/, "").replace(/\u00a0/g, " ").trim();
       if (["nan", "nat", "none", "undefined", "null"].includes(text.toLowerCase())) return "";
       return text;
+    }
+
+    function firstCleanValue(values, cleaner) {
+      for (const value of values) {
+        const cleaned = cleaner(value);
+        if (cleaned) return cleaned;
+      }
+      return "";
+    }
+
+    function cleanYear(value) {
+      let text = cleanText(value);
+      if (!text) return "";
+      if (/^\d+\.0$/.test(text)) text = text.slice(0, -2);
+      if (/^\d{4}$/.test(text)) return text;
+      const parsed = new Date(text.replaceAll("/", "-"));
+      if (!Number.isNaN(parsed.getTime())) return String(parsed.getFullYear());
+      return text;
+    }
+
+    function cleanIsbn(value) {
+      let text = cleanText(value);
+      if (!text) return "";
+      if (/^\d+\.0$/.test(text)) text = text.slice(0, -2);
+      if (/^\d+\.\d+$/.test(text)) {
+        const number = Number(text);
+        if (Number.isInteger(number)) return String(number);
+      }
+      return text;
+    }
+
+    function cleanUploadSubject(value) {
+      const text = cleanText(value);
+      if (!text) return "";
+      return `,${text.replaceAll(",", "&")},`;
     }
 
     function normalizeIsbn(value) {
@@ -871,7 +1012,9 @@ ${departmentDescription}
 
     function revokeUrl() {
       if (outputUrl) URL.revokeObjectURL(outputUrl);
+      if (uploadUrl) URL.revokeObjectURL(uploadUrl);
       outputUrl = null;
+      uploadUrl = null;
     }
   </script>
 </body>
