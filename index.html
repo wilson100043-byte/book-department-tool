@@ -329,24 +329,6 @@
             <input id="schoolName" type="text" placeholder="淡江大學" required>
           </label>
 
-          <label>
-            <span>學校代碼</span>
-            <input id="schoolCode" type="text" placeholder="例如：TKU" required>
-            <small>用於系統上傳格式。</small>
-          </label>
-
-          <label>
-            <span>主題代碼</span>
-            <input id="subjectCode" type="text" placeholder="例如：EBOOK" required>
-            <small>會自動轉成大寫，只能使用英文字母、數字與底線。</small>
-          </label>
-
-          <label>
-            <span>SDGs</span>
-            <input id="sdgs" type="text" placeholder=",9," required>
-            <small>格式像 ,9, 或 ,9,12,。</small>
-          </label>
-
           <label class="wide">
             <span>貼上學校系所描述（給 AI 用）</span>
             <textarea id="sourceDepartmentText" placeholder="例如：商管學院：企業管理、財務金融、會計、國際企業、保險、經濟、統計與資料科學。工學院：建築、土木、水環、機械與機電、電機、航太、化材。"></textarea>
@@ -397,7 +379,33 @@
           </div>
           <div class="actions">
             <a id="downloadOutput" class="button-link" href="#" download="wiley_已購買與系所比對.xlsx">下載比對結果 Excel</a>
-            <a id="downloadUpload" class="button-link secondary" href="#" download="系統上傳格式_未購買.xlsx">下載系統上傳格式</a>
+          </div>
+        </section>
+
+        <section id="uploadPanel" class="result" hidden>
+          <h2>最後一步：產生系統上傳格式</h2>
+          <p class="header-note">這一步可以晚點再做；只會用未購買書目產生 `Tablib Dataset` 工作表。</p>
+          <div class="form-grid">
+            <label>
+              <span>學校代碼</span>
+              <input id="schoolCode" type="text" placeholder="例如：TKU">
+            </label>
+
+            <label>
+              <span>主題代碼</span>
+              <input id="subjectCode" type="text" placeholder="例如：EBOOK">
+              <small>會自動轉成大寫，只能使用英文字母、數字與底線。</small>
+            </label>
+
+            <label>
+              <span>SDGs</span>
+              <input id="sdgs" type="text" placeholder=",9,">
+              <small>格式像 ,9, 或 ,9,12,。</small>
+            </label>
+          </div>
+          <div class="actions">
+            <button id="createUploadButton" class="secondary" type="button">產生系統上傳格式</button>
+            <a id="downloadUpload" class="button-link" href="#" download="系統上傳格式_未購買.xlsx" hidden>下載系統上傳格式</a>
           </div>
         </section>
       </section>
@@ -408,7 +416,7 @@
           <li>先上傳書單與已購買清單</li>
           <li>貼上系所描述並複製 Prompt</li>
           <li>把 AI 回傳的 CSV 貼回工具</li>
-          <li>按開始後下載比對結果與系統上傳檔</li>
+          <li>先下載比對結果，最後再視需要產生系統上傳檔</li>
         </ul>
         <div class="prompt-block">
           <h2>AI 回傳格式</h2>
@@ -416,7 +424,6 @@
             <li>第一列固定：學校名稱、系所名稱、關鍵字</li>
             <li>關鍵字用半形分號 ; 分隔</li>
             <li>同一本書可命中多個系所</li>
-            <li>系統上傳格式只會輸出未購買書目</li>
           </ul>
         </div>
         <pre class="sample">學校名稱,系所名稱,關鍵字
@@ -475,11 +482,14 @@
     const submitButton = document.querySelector("#submitButton");
     const message = document.querySelector("#message");
     const result = document.querySelector("#result");
+    const uploadPanel = document.querySelector("#uploadPanel");
+    const createUploadButton = document.querySelector("#createUploadButton");
     const downloadOutput = document.querySelector("#downloadOutput");
     const downloadUpload = document.querySelector("#downloadUpload");
 
     let wileyWorkbook = null;
     let purchasedWorkbook = null;
+    let lastConversion = null;
     let outputUrl = null;
     let uploadUrl = null;
 
@@ -538,6 +548,20 @@
       }
     });
 
+    createUploadButton.addEventListener("click", () => {
+      try {
+        if (!lastConversion) throw new Error("請先完成書單比對，再產生系統上傳格式。");
+        const uploadSettings = getUploadSettings();
+        const uploadRows = lastConversion.outputRows
+          .filter((row) => row["是否已購買"] === "未購買")
+          .map((row) => buildUploadRow(row, uploadSettings));
+        renderUploadWorkbook(uploadRows);
+        showMessage(`系統上傳格式已產生，共 ${uploadRows.length} 筆未購買書目。`, false);
+      } catch (error) {
+        showMessage(error.message || "系統上傳格式產生失敗，請確認欄位設定。", true);
+      }
+    });
+
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       hideResult();
@@ -561,7 +585,6 @@
 
         const schoolName = cleanText(document.querySelector("#schoolName").value);
         if (!schoolName) throw new Error("請輸入學校名稱。");
-        const uploadSettings = getUploadSettings();
         const departmentRules = parseDepartmentRules(keywordText.value, schoolName);
         if (!departmentRules.length) {
           throw new Error(`AI 回傳結果找不到「${schoolName}」的資料，請確認 CSV 的學校名稱是否一致。`);
@@ -573,10 +596,9 @@
           targetSheetName: targetSheetSelect.value,
           purchasedSheetName: purchasedSheetSelect.value,
           departmentRules,
-          uploadSettings,
         });
         renderResult(conversion);
-        showMessage("比對完成。已產生比對結果與系統上傳格式；系統上傳格式只包含未購買書目。", false);
+        showMessage("比對完成。你可以先下載比對結果；若要上傳到系統，請到最後一步產生系統上傳格式。", false);
       } catch (error) {
         showMessage(error.message || "比對失敗，請確認檔案與欄位設定。", true);
       } finally {
@@ -681,12 +703,11 @@ ${departmentDescription}
       return { schoolCode, subjectCode, sdgs };
     }
 
-    function runMatch({ workbook, purchasedWorkbook, targetSheetName, purchasedSheetName, departmentRules, uploadSettings }) {
+    function runMatch({ workbook, purchasedWorkbook, targetSheetName, purchasedSheetName, departmentRules }) {
       const target = readWorksheetRows(workbook, targetSheetName, ["Title", "O-Book ISBN13"]);
       const purchased = readWorksheetRows(purchasedWorkbook, purchasedSheetName, ["O-ISBN_比對"]);
       const purchasedIndex = buildPurchasedIndex(purchased.rows);
       const outputRows = [];
-      const uploadRows = [];
       let purchasedCount = 0;
       let departmentHitCount = 0;
 
@@ -702,14 +723,12 @@ ${departmentDescription}
         row["是否已購買"] = isPurchased ? "已購買" : "未購買";
         row["系所"] = departments.join("；");
         outputRows.push(row);
-        if (!isPurchased) uploadRows.push(buildUploadRow(sourceRow, uploadSettings));
       });
 
       const outputHeaders = [...target.headers.filter((header) => !OUTPUT_ADDED_COLUMNS.includes(header)), ...OUTPUT_ADDED_COLUMNS];
       return {
         outputRows,
         outputHeaders,
-        uploadRows,
         totalCount: outputRows.length,
         purchasedCount,
         notPurchasedCount: outputRows.length - purchasedCount,
@@ -854,6 +873,8 @@ ${departmentDescription}
 
     function renderResult(conversion) {
       revokeUrl();
+      lastConversion = conversion;
+      downloadUpload.hidden = true;
 
       const worksheet = XLSX.utils.json_to_sheet(conversion.outputRows, { header: conversion.outputHeaders });
       const range = XLSX.utils.decode_range(worksheet["!ref"]);
@@ -866,7 +887,20 @@ ${departmentDescription}
       XLSX.utils.book_append_sheet(outputWorkbook, worksheet, "全部比對結果");
       outputUrl = workbookToUrl(outputWorkbook);
 
-      const uploadWorksheet = XLSX.utils.json_to_sheet(conversion.uploadRows, { header: UPLOAD_COLUMNS });
+      document.querySelector("#totalCount").textContent = conversion.totalCount;
+      document.querySelector("#purchasedCount").textContent = conversion.purchasedCount;
+      document.querySelector("#notPurchasedCount").textContent = conversion.notPurchasedCount;
+      document.querySelector("#departmentCount").textContent = conversion.departmentHitCount;
+      downloadOutput.href = outputUrl;
+      result.hidden = false;
+      uploadPanel.hidden = false;
+    }
+
+    function renderUploadWorkbook(uploadRows) {
+      if (uploadUrl) URL.revokeObjectURL(uploadUrl);
+      uploadUrl = null;
+
+      const uploadWorksheet = XLSX.utils.json_to_sheet(uploadRows, { header: UPLOAD_COLUMNS });
       const uploadRange = XLSX.utils.decode_range(uploadWorksheet["!ref"]);
       uploadWorksheet["!autofilter"] = { ref: XLSX.utils.encode_range(uploadRange) };
       uploadWorksheet["!cols"] = UPLOAD_COLUMNS.map((header) => ({
@@ -875,14 +909,8 @@ ${departmentDescription}
       const uploadWorkbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(uploadWorkbook, uploadWorksheet, "Tablib Dataset");
       uploadUrl = workbookToUrl(uploadWorkbook);
-
-      document.querySelector("#totalCount").textContent = conversion.totalCount;
-      document.querySelector("#purchasedCount").textContent = conversion.purchasedCount;
-      document.querySelector("#notPurchasedCount").textContent = conversion.notPurchasedCount;
-      document.querySelector("#departmentCount").textContent = conversion.departmentHitCount;
-      downloadOutput.href = outputUrl;
       downloadUpload.href = uploadUrl;
-      result.hidden = false;
+      downloadUpload.hidden = false;
     }
 
     function buildUploadRow(sourceRow, settings) {
@@ -1008,6 +1036,9 @@ ${departmentDescription}
     function hideResult() {
       message.hidden = true;
       result.hidden = true;
+      uploadPanel.hidden = true;
+      downloadUpload.hidden = true;
+      lastConversion = null;
     }
 
     function revokeUrl() {
