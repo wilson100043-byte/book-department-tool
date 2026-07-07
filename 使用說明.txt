@@ -1,6 +1,6 @@
 Wiley 已購買與系所比對工具
 
-使用方式
+使用方式一：Wiley 已購買與系所比對
 
 1. 用瀏覽器開啟 index.html。
 2. 上傳 Wiley 全庫 Excel，例如 Wiley全庫OnlineBooks_FullList_202601.xltx。
@@ -17,6 +17,20 @@ Wiley 已購買與系所比對工具
 13. 如果要上傳到系統，再到最後一步填寫學校代碼、主題代碼、SDGs。
 14. 按「產生系統上傳格式」並下載系統上傳格式 Excel。
 
+這個流程產生的系統上傳格式只會包含未購買書目。
+
+使用方式二：直接轉系統上傳格式
+
+如果你已經有整理好的 Excel，不需要比對已購買，可以直接使用下方「直接轉系統上傳格式」區塊。
+
+1. 上傳來源 Excel。
+2. 選擇來源工作表。
+3. 填寫學校代碼、主題代碼、SDGs。
+4. 按「直接產生系統上傳格式」。
+5. 下載系統上傳格式 Excel。
+
+這個流程會把來源工作表所有資料列都轉出，不會篩選未購買。
+
 AI 回傳格式
 
 學校名稱,系所名稱,關鍵字
@@ -29,8 +43,19 @@ AI 回傳格式
   - 是否已購買
   - 系所
 - 系統上傳格式 Excel：最後一步才額外產生，只輸出未購買書目，工作表名稱為 Tablib Dataset。
+- 直接轉系統上傳格式 Excel：不做比對，直接把來源工作表全部資料列轉成 Tablib Dataset。
 - 系統上傳格式會帶入最後一步填寫的學校代碼、主題代碼與 SDGs。
 - 輸出的 Excel 已設定篩選箭頭。
+
+直接轉檔可辨識常見欄位：
+
+- 題名：Title、題名、書名
+- 作者：First Author Full Name、作者、Author
+- 出版者：Imprint、出版者、Publisher
+- 出版年：Copyright Year、出版年、Year
+- ISBN：O-Book ISBN13、E-Book ISBN13、Print ISBN13、O-ISBN_比對、ISBN、ISBN13
+- 網址：URL on Wiley Online Library、網址、URL
+- 主題：Specialized Subject Area、主題、Main Subject Category
 
 注意
 

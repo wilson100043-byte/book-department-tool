@@ -272,6 +272,29 @@
       background: #1f2937;
     }
 
+    .converter-panel {
+      margin-top: 18px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .section-title h2 {
+      margin: 0;
+    }
+
+    .section-title p {
+      max-width: 520px;
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
     @media (max-width: 860px) {
       main {
         width: min(100% - 20px, 1120px);
@@ -281,7 +304,8 @@
       header,
       .layout,
       .form-grid,
-      .stats {
+      .stats,
+      .section-title {
         grid-template-columns: 1fr;
         display: grid;
       }
@@ -432,6 +456,50 @@
 淡江大學,電機工程學系,電機;電子;半導體;electrical engineering;electronics</pre>
       </aside>
     </section>
+
+    <section class="panel converter-panel">
+      <div class="section-title">
+        <h2>直接轉系統上傳格式</h2>
+        <p>已經有整理好的 Excel 時用這一區，不需要先跑已購買比對。工具會把來源工作表全部列轉成 `Tablib Dataset` 系統上傳格式。</p>
+      </div>
+
+      <div class="form-grid">
+        <label class="wide">
+          <span>來源 Excel</span>
+          <input id="directUploadFile" type="file" accept=".xlsx,.xls,.xltx">
+          <small>可上傳 Wiley 書單、比對後書單，或已整理好的書目 Excel。</small>
+        </label>
+
+        <label>
+          <span>來源工作表</span>
+          <select id="directUploadSheet"></select>
+        </label>
+
+        <label>
+          <span>學校代碼</span>
+          <input id="directSchoolCode" type="text" placeholder="例如：TKU">
+        </label>
+
+        <label>
+          <span>主題代碼</span>
+          <input id="directSubjectCode" type="text" placeholder="例如：EBOOK">
+          <small>會自動轉成大寫，只能使用英文字母、數字與底線。</small>
+        </label>
+
+        <label>
+          <span>SDGs</span>
+          <input id="directSdgs" type="text" placeholder=",9,">
+          <small>格式像 ,9, 或 ,9,12,。</small>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="directConvertButton" class="secondary" type="button">直接產生系統上傳格式</button>
+        <a id="downloadDirectUpload" class="button-link" href="#" download="系統上傳格式_直接轉檔.xlsx" hidden>下載系統上傳格式</a>
+      </div>
+
+      <section id="directMessage" class="message" hidden></section>
+    </section>
   </main>
 
   <script>
@@ -486,12 +554,22 @@
     const createUploadButton = document.querySelector("#createUploadButton");
     const downloadOutput = document.querySelector("#downloadOutput");
     const downloadUpload = document.querySelector("#downloadUpload");
+    const directUploadFile = document.querySelector("#directUploadFile");
+    const directUploadSheetSelect = document.querySelector("#directUploadSheet");
+    const directSchoolCodeInput = document.querySelector("#directSchoolCode");
+    const directSubjectCodeInput = document.querySelector("#directSubjectCode");
+    const directSdgsInput = document.querySelector("#directSdgs");
+    const directConvertButton = document.querySelector("#directConvertButton");
+    const downloadDirectUpload = document.querySelector("#downloadDirectUpload");
+    const directMessage = document.querySelector("#directMessage");
 
     let wileyWorkbook = null;
     let purchasedWorkbook = null;
+    let directWorkbook = null;
     let lastConversion = null;
     let outputUrl = null;
     let uploadUrl = null;
+    let directUploadUrl = null;
 
     copyPromptButton.addEventListener("click", async () => {
       try {
@@ -559,6 +637,43 @@
         showMessage(`系統上傳格式已產生，共 ${uploadRows.length} 筆未購買書目。`, false);
       } catch (error) {
         showMessage(error.message || "系統上傳格式產生失敗，請確認欄位設定。", true);
+      }
+    });
+
+    directUploadFile.addEventListener("change", async () => {
+      const file = directUploadFile.files[0];
+      directMessage.hidden = true;
+      downloadDirectUpload.hidden = true;
+      if (directUploadUrl) URL.revokeObjectURL(directUploadUrl);
+      directUploadUrl = null;
+
+      if (!file) {
+        directWorkbook = null;
+        directUploadSheetSelect.innerHTML = "";
+        return;
+      }
+
+      try {
+        directWorkbook = await readWorkbook(file);
+        populateSelect(directUploadSheetSelect, directWorkbook.SheetNames, "");
+        showDirectMessage("來源 Excel 已讀取。請確認工作表與欄位設定後按「直接產生系統上傳格式」。", false);
+      } catch (error) {
+        directWorkbook = null;
+        showDirectMessage(error.message || "來源 Excel 讀取失敗。", true);
+      }
+    });
+
+    directConvertButton.addEventListener("click", () => {
+      try {
+        if (!directWorkbook) throw new Error("請先上傳要轉成系統格式的 Excel。");
+        if (!directUploadSheetSelect.value) throw new Error("請選擇來源工作表。");
+        const uploadSettings = getUploadSettingsFrom(directSchoolCodeInput, directSubjectCodeInput, directSdgsInput);
+        const source = readAnyWorksheetRows(directWorkbook, directUploadSheetSelect.value);
+        const uploadRows = source.rows.map((row) => buildUploadRow(row, uploadSettings));
+        renderDirectUploadWorkbook(uploadRows);
+        showDirectMessage(`系統上傳格式已產生，共 ${uploadRows.length} 筆。`, false);
+      } catch (error) {
+        showDirectMessage(error.message || "直接轉檔失敗，請確認檔案與欄位設定。", true);
       }
     });
 
@@ -692,14 +807,18 @@ ${departmentDescription}
     }
 
     function getUploadSettings() {
-      const schoolCode = cleanText(schoolCodeInput.value);
-      const subjectCode = cleanText(subjectCodeInput.value).toUpperCase();
-      const sdgs = cleanText(sdgsInput.value);
+      return getUploadSettingsFrom(schoolCodeInput, subjectCodeInput, sdgsInput);
+    }
+
+    function getUploadSettingsFrom(schoolCodeElement, subjectCodeElement, sdgsElement) {
+      const schoolCode = cleanText(schoolCodeElement.value);
+      const subjectCode = cleanText(subjectCodeElement.value).toUpperCase();
+      const sdgs = cleanText(sdgsElement.value);
       if (!schoolCode) throw new Error("請輸入學校代碼。");
       if (!subjectCode) throw new Error("請輸入主題代碼。");
       if (!/^[A-Z0-9_]+$/.test(subjectCode)) throw new Error("主題代碼只能使用英文字母、數字與底線。");
       if (!/^,(?:\d+,)+$/.test(sdgs)) throw new Error("SDGs 格式必須像 ,9, 或 ,9,12,。");
-      subjectCodeInput.value = subjectCode;
+      subjectCodeElement.value = subjectCode;
       return { schoolCode, subjectCode, sdgs };
     }
 
@@ -756,6 +875,32 @@ ${departmentDescription}
           });
           return item;
         });
+      return { headers, rows, headerRowIndex };
+    }
+
+    function readAnyWorksheetRows(workbook, sheetName) {
+      if (!workbook.SheetNames.includes(sheetName)) {
+        throw new Error(`找不到工作表「${sheetName}」。`);
+      }
+      const sheet = workbook.Sheets[sheetName];
+      const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false });
+      let headerRowIndex = detectHeaderRow(matrix, ["Title", "題名", "題名(可大寫可小寫)", "ISBN", "O-Book ISBN13"]);
+      if (headerRowIndex < 0) {
+        headerRowIndex = matrix.findIndex((row) => row.some((cell) => cleanText(cell)));
+      }
+      if (headerRowIndex < 0) throw new Error(`工作表「${sheetName}」沒有可讀取的資料。`);
+
+      const headers = matrix[headerRowIndex].map((value, index) => cleanText(value) || `欄位${index + 1}`);
+      const rows = matrix.slice(headerRowIndex + 1)
+        .filter((row) => row.some((cell) => cleanText(cell)))
+        .map((row) => {
+          const item = {};
+          headers.forEach((header, index) => {
+            item[header] = cleanText(row[index]);
+          });
+          return item;
+        });
+      if (!rows.length) throw new Error(`工作表「${sheetName}」沒有可轉換的資料列。`);
       return { headers, rows, headerRowIndex };
     }
 
@@ -900,6 +1045,19 @@ ${departmentDescription}
       if (uploadUrl) URL.revokeObjectURL(uploadUrl);
       uploadUrl = null;
 
+      uploadUrl = createUploadWorkbookUrl(uploadRows);
+      downloadUpload.href = uploadUrl;
+      downloadUpload.hidden = false;
+    }
+
+    function renderDirectUploadWorkbook(uploadRows) {
+      if (directUploadUrl) URL.revokeObjectURL(directUploadUrl);
+      directUploadUrl = createUploadWorkbookUrl(uploadRows);
+      downloadDirectUpload.href = directUploadUrl;
+      downloadDirectUpload.hidden = false;
+    }
+
+    function createUploadWorkbookUrl(uploadRows) {
       const uploadWorksheet = XLSX.utils.json_to_sheet(uploadRows, { header: UPLOAD_COLUMNS });
       const uploadRange = XLSX.utils.decode_range(uploadWorksheet["!ref"]);
       uploadWorksheet["!autofilter"] = { ref: XLSX.utils.encode_range(uploadRange) };
@@ -908,25 +1066,41 @@ ${departmentDescription}
       }));
       const uploadWorkbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(uploadWorkbook, uploadWorksheet, "Tablib Dataset");
-      uploadUrl = workbookToUrl(uploadWorkbook);
-      downloadUpload.href = uploadUrl;
-      downloadUpload.hidden = false;
+      return workbookToUrl(uploadWorkbook);
     }
 
     function buildUploadRow(sourceRow, settings) {
+      const title = getRowValue(sourceRow, ["Title", "題名(可大寫可小寫)", "題名", "書名"]);
+      const author = getRowValue(sourceRow, ["First Author Full Name", "作者(可大寫可小寫)", "作者", "Author"]);
+      const publisher = getRowValue(sourceRow, ["Imprint", "出版者(可大寫可小寫)", "出版者", "Publisher"]) || "Wiley";
+      const year = getRowValue(sourceRow, ["Copyright Year", "出版年", "Year"]);
+      const url = getRowValue(sourceRow, ["URL on Wiley Online Library", "網址", "URL"]);
+      const subject = getRowValue(sourceRow, [
+        "Specialized Subject Area",
+        "主題(英文大小寫皆可，出版社主題若有逗號，請改為 &\n若有多主題以逗號區隔。)",
+        "主題",
+        "Main Subject Category",
+      ]);
       return {
         "ID": "",
         "學校代碼": settings.schoolCode,
         "主題代碼(全字母大寫)": settings.subjectCode,
-        "題名(可大寫可小寫)": cleanText(sourceRow["Title"]),
-        "作者(可大寫可小寫)": cleanText(sourceRow["First Author Full Name"]),
-        "出版者(可大寫可小寫)": cleanText(sourceRow["Imprint"]) || "Wiley",
-        "出版年": cleanYear(sourceRow["Copyright Year"]),
+        "題名(可大寫可小寫)": title,
+        "作者(可大寫可小寫)": author,
+        "出版者(可大寫可小寫)": publisher,
+        "出版年": cleanYear(year),
         "索書號-CCL": "",
         "索書號-LC": "",
         "索書號-DDC": "",
         "索書號-NLM": "",
-        "ISBN": firstCleanValue([sourceRow["O-Book ISBN13"], sourceRow["E-Book ISBN13"], sourceRow["Print ISBN13"], sourceRow["ISBN"]], cleanIsbn),
+        "ISBN": firstCleanValue([
+          sourceRow["O-Book ISBN13"],
+          sourceRow["E-Book ISBN13"],
+          sourceRow["Print ISBN13"],
+          sourceRow["O-ISBN_比對"],
+          sourceRow["ISBN"],
+          sourceRow["ISBN13"],
+        ], cleanIsbn),
         "資料類型": "",
         "備註": "",
         "內容簡介": "",
@@ -934,10 +1108,10 @@ ${departmentDescription}
         "pic": "",
         "書封網址": "",
         "書封來源": "",
-        "網址": cleanText(sourceRow["URL on Wiley Online Library"]),
+        "網址": url,
         "網址說明": "",
         "SDGs(數字前後一定要有逗號)": settings.sdgs,
-        "主題(英文大小寫皆可，出版社主題若有逗號，請改為 &\n若有多主題以逗號區隔。)": cleanUploadSubject(sourceRow["Specialized Subject Area"]),
+        "主題(英文大小寫皆可，出版社主題若有逗號，請改為 &\n若有多主題以逗號區隔。)": cleanUploadSubject(subject),
       };
     }
 
@@ -953,6 +1127,14 @@ ${departmentDescription}
         cloned[header] = row[header] === undefined ? "" : row[header];
       });
       return cloned;
+    }
+
+    function getRowValue(row, columns) {
+      for (const column of columns) {
+        const value = cleanText(row[column]);
+        if (value) return value;
+      }
+      return "";
     }
 
     function cleanText(value) {
@@ -992,7 +1174,9 @@ ${departmentDescription}
     }
 
     function cleanUploadSubject(value) {
-      const text = cleanText(value);
+      let text = cleanText(value);
+      if (!text) return "";
+      text = text.replace(/^,+|,+$/g, "").replaceAll(",", "&");
       if (!text) return "";
       return `,${text.replaceAll(",", "&")},`;
     }
@@ -1031,6 +1215,12 @@ ${departmentDescription}
       message.textContent = text;
       message.className = isError ? "message error" : "message";
       message.hidden = false;
+    }
+
+    function showDirectMessage(text, isError) {
+      directMessage.textContent = text;
+      directMessage.className = isError ? "message error" : "message";
+      directMessage.hidden = false;
     }
 
     function hideResult() {
