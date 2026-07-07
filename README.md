@@ -1,4 +1,4 @@
-# Wiley 已購買與系所比對工具
+# 已購買與系所比對工具
 
 這是純前端 GitHub Pages 小工具。使用者不需要安裝 Python、Docker、App，也不需要 API Key。
 
