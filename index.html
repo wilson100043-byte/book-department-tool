@@ -1122,8 +1122,8 @@ ${departmentDescription}
     }
 
     function workbookToUrl(workbook) {
-      const array = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
-      const blob = new Blob([array], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const array = XLSX.write(workbook, { bookType: "xlsx", type: "array", compression: true });
+      const blob = new Blob([new Uint8Array(array)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       return URL.createObjectURL(blob);
     }
 
