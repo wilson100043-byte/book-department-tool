@@ -39,7 +39,7 @@ AI 必須只回傳 CSV，不要 Markdown、不要說明文字。
 
 輸出 Excel 會設定篩選箭頭，可在 Excel 中篩選 `是否已購買 = 未購買`。
 
-## 單一 Prompt 範本
+## Prompt 範本
 
 工具畫面會依照你輸入的學校名稱與系所描述自動產生完整 Prompt。下面是固定格式：
 
@@ -63,21 +63,6 @@ CSV 輸出規則：
 12. 如果一個學院描述是跨領域或新興學院，請依描述建立合理的系所或領域名稱，並產生對應關鍵字。
 ```
 
-## 部署到 GitHub Pages
-
-把這些檔案放到 GitHub repository：
-
-```text
-index.html
-README.md
-使用說明.txt
-系所關鍵字範本.csv
-AI產生系所關鍵字Prompt.txt
-```
-
-到 GitHub repository 的 `Settings > Pages` 啟用 GitHub Pages，即可用網址開啟。
-
-`index.html` 會從 CDN 載入 SheetJS Excel 元件，所以 repository 不需要放 `xlsx.full.min.js`。
 
 ## 隱私
 
