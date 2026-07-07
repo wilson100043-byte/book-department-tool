@@ -247,6 +247,31 @@
       white-space: pre;
     }
 
+    .prompt-block {
+      margin-top: 18px;
+      border-top: 1px solid var(--line);
+      padding-top: 18px;
+    }
+
+    .prompt-actions {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .prompt-button {
+      width: 100%;
+      min-height: 40px;
+      justify-content: flex-start;
+      background: #334155;
+      font-size: 14px;
+      text-align: left;
+    }
+
+    .prompt-button:hover {
+      background: #1f2937;
+    }
+
     @media (max-width: 860px) {
       main {
         width: min(100% - 20px, 1120px);
@@ -290,7 +315,13 @@
           <label>
             <span>已購買工作表</span>
             <select id="purchasedSheet"></select>
-            <small>預設使用同一個 Wiley 檔中的 TAEBDC複本202512。</small>
+            <small>可用同一個 Wiley 檔中的 TAEBDC複本202512，也可在下方另外上傳已購買 Excel。</small>
+          </label>
+
+          <label>
+            <span>已購買 Excel（選填）</span>
+            <input id="purchasedFile" type="file" accept=".xlsx,.xls,.xltx">
+            <small>若上傳，已購買工作表會改用這個檔案。</small>
           </label>
 
           <label>
@@ -351,6 +382,18 @@
 淡江大學,財務金融學系,財務金融;金融;投資;corporate finance;investment
 淡江大學,會計學系,會計;審計;稅務;accounting;auditing
 淡江大學,電機工程學系,電機;電子;半導體;electrical engineering;electronics</pre>
+        <div class="prompt-block">
+          <h2>AI 產生 CSV Prompt</h2>
+          <ul class="plain-list">
+            <li>先把系所清單丟給 ChatGPT 或 Gemini</li>
+            <li>要求只回 CSV，不要解釋文字</li>
+            <li>再貼回左側文字框</li>
+          </ul>
+          <div class="prompt-actions">
+            <button class="prompt-button" type="button" data-copy-prompt="department">複製系所清單整理 Prompt</button>
+            <button class="prompt-button" type="button" data-copy-prompt="keyword">複製系所關鍵字擴充 Prompt</button>
+          </div>
+        </div>
       </aside>
     </section>
   </main>
@@ -362,9 +405,49 @@
     const PURCHASED_ISBN_COLUMNS = ["O-ISBN_比對", "O-Book ISBN13", "E-Book ISBN13", "ISBN", "ISBN13"];
     const TEXT_COLUMNS = ["Title", "Main Subject Category", "Specialized Subject Area", "主題", "次主題"];
     const OUTPUT_ADDED_COLUMNS = ["是否已購買", "系所"];
+    const DEPARTMENT_PROMPT = `你是一位台灣大學系所資料整理助理。請把我提供的學校、學院、系所或自然語言描述，整理成可貼到書單比對工具的 CSV。
+
+輸出規則：
+1. 只輸出 CSV，不要 Markdown，不要說明文字。
+2. 第一列固定為：學校名稱,系所名稱,關鍵字
+3. 每一列只放一個系所。
+4. 學校名稱必須完全使用我指定的學校名稱。
+5. 系所名稱請使用完整正式名稱；如果我只給簡稱，請合理補成正式系所名稱。
+6. 關鍵字用半形分號 ; 分隔。
+7. 每個系所至少產生 8 個關鍵字，包含：
+   - 系所全名
+   - 常見簡稱
+   - 中文主題詞
+   - 相關英文學科詞
+   - Wiley 書目標題中可能出現的英文詞
+8. 不要加入我沒有指定學校的系所。
+9. 不要合併不同系所。
+
+我要整理的學校名稱：
+【在這裡填學校名稱，例如：淡江大學】
+
+我要整理的系所/學院描述：
+【在這裡貼上學院與系所清單，例如：商管學院：企業管理、財務金融、會計、國際企業、保險、經濟、統計與資料科學。】`;
+    const KEYWORD_PROMPT = `你是一位圖書館電子書選書與學科分類助理。請根據我提供的系所清單，為每個系所擴充可用於 Wiley 英文書目比對的關鍵字。
+
+輸出規則：
+1. 只輸出 CSV，不要 Markdown，不要說明文字。
+2. 第一列固定為：學校名稱,系所名稱,關鍵字
+3. 關鍵字用半形分號 ; 分隔。
+4. 每個系所至少產生 12 個關鍵字。
+5. 關鍵字要包含中文與英文。
+6. 英文關鍵字要包含學科正式名稱、常見書名詞、研究主題詞。
+7. 避免太廣泛的詞，例如 research、introduction、theory、practice、management 單獨使用時太泛者不要單獨列入，除非搭配具體領域。
+8. 不要加入其他學校的系所。
+9. 不要改變學校名稱與系所名稱。
+
+請依照以下資料產生：
+學校名稱,系所名稱
+【在這裡貼系所清單】`;
 
     const form = document.querySelector("#matchForm");
     const wileyFile = document.querySelector("#wileyFile");
+    const purchasedFile = document.querySelector("#purchasedFile");
     const targetSheetSelect = document.querySelector("#targetSheet");
     const purchasedSheetSelect = document.querySelector("#purchasedSheet");
     const keywordFile = document.querySelector("#keywordFile");
@@ -375,7 +458,21 @@
     const downloadOutput = document.querySelector("#downloadOutput");
 
     let wileyWorkbook = null;
+    let purchasedWorkbook = null;
     let outputUrl = null;
+
+    document.querySelectorAll("[data-copy-prompt]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const promptType = button.getAttribute("data-copy-prompt");
+        const prompt = promptType === "department" ? DEPARTMENT_PROMPT : KEYWORD_PROMPT;
+        try {
+          await copyText(prompt);
+          showMessage("已複製 Prompt。請貼到 ChatGPT 或 Gemini，取得 CSV 後再貼回系所關鍵字欄位。", false);
+        } catch (error) {
+          showMessage("瀏覽器無法自動複製，請改用 README 或 Prompt 檔案中的文字。", true);
+        }
+      });
+    });
 
     wileyFile.addEventListener("change", async () => {
       hideResult();
@@ -383,11 +480,32 @@
       if (!file) return;
       try {
         wileyWorkbook = await readWorkbook(file);
-        populateSheetSelects(wileyWorkbook.SheetNames);
-        showMessage("已讀取 Excel，請確認工作表與系所關鍵字。", false);
+        populateSelect(targetSheetSelect, wileyWorkbook.SheetNames, DEFAULT_TARGET_SHEET);
+        if (!purchasedWorkbook) {
+          populateSelect(purchasedSheetSelect, wileyWorkbook.SheetNames, DEFAULT_PURCHASED_SHEET);
+        }
+        showMessage("Excel 已載入完成。下一步請確認工作表、輸入學校名稱、貼上系所關鍵字 CSV，然後按「開始比對並產生 Excel」。", false);
       } catch (error) {
         wileyWorkbook = null;
         showMessage(error.message || "Excel 讀取失敗。", true);
+      }
+    });
+
+    purchasedFile.addEventListener("change", async () => {
+      hideResult();
+      const file = purchasedFile.files[0];
+      if (!file) {
+        purchasedWorkbook = null;
+        if (wileyWorkbook) populateSelect(purchasedSheetSelect, wileyWorkbook.SheetNames, DEFAULT_PURCHASED_SHEET);
+        return;
+      }
+      try {
+        purchasedWorkbook = await readWorkbook(file);
+        populateSelect(purchasedSheetSelect, purchasedWorkbook.SheetNames, DEFAULT_PURCHASED_SHEET);
+        showMessage("已購買 Excel 已載入完成。請確認已購買工作表，完成後按「開始比對並產生 Excel」。", false);
+      } catch (error) {
+        purchasedWorkbook = null;
+        showMessage(error.message || "已購買 Excel 讀取失敗。", true);
       }
     });
 
@@ -396,7 +514,7 @@
       if (!file) return;
       try {
         keywordText.value = await readTextFile(file);
-        showMessage("已載入系所關鍵字 CSV。", false);
+        showMessage("系所關鍵字 CSV 已載入完成。確認學校名稱後即可開始比對。", false);
       } catch (error) {
         showMessage(error.message || "CSV 讀取失敗。", true);
       }
@@ -414,7 +532,10 @@
           const file = wileyFile.files[0];
           if (!file) throw new Error("請先上傳 Wiley 全庫 Excel。");
           wileyWorkbook = await readWorkbook(file);
-          populateSheetSelects(wileyWorkbook.SheetNames);
+          populateSelect(targetSheetSelect, wileyWorkbook.SheetNames, DEFAULT_TARGET_SHEET);
+          if (!purchasedWorkbook) {
+            populateSelect(purchasedSheetSelect, wileyWorkbook.SheetNames, DEFAULT_PURCHASED_SHEET);
+          }
         }
 
         submitButton.disabled = true;
@@ -429,6 +550,7 @@
 
         const conversion = runMatch({
           workbook: wileyWorkbook,
+          purchasedWorkbook: purchasedWorkbook || wileyWorkbook,
           targetSheetName: targetSheetSelect.value,
           purchasedSheetName: purchasedSheetSelect.value,
           departmentRules,
@@ -443,15 +565,12 @@
       }
     });
 
-    function populateSheetSelects(sheetNames) {
-      targetSheetSelect.innerHTML = "";
-      purchasedSheetSelect.innerHTML = "";
+    function populateSelect(select, sheetNames, preferredSheetName) {
+      select.innerHTML = "";
       sheetNames.forEach((name) => {
-        targetSheetSelect.appendChild(new Option(name, name));
-        purchasedSheetSelect.appendChild(new Option(name, name));
+        select.appendChild(new Option(name, name));
       });
-      targetSheetSelect.value = sheetNames.includes(DEFAULT_TARGET_SHEET) ? DEFAULT_TARGET_SHEET : sheetNames[0];
-      purchasedSheetSelect.value = sheetNames.includes(DEFAULT_PURCHASED_SHEET) ? DEFAULT_PURCHASED_SHEET : sheetNames[0];
+      select.value = sheetNames.includes(preferredSheetName) ? preferredSheetName : sheetNames[0];
     }
 
     function readWorkbook(file) {
@@ -478,9 +597,27 @@
       });
     }
 
-    function runMatch({ workbook, targetSheetName, purchasedSheetName, departmentRules }) {
+    async function copyText(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      const ok = document.execCommand("copy");
+      textarea.remove();
+      if (!ok) throw new Error("copy failed");
+    }
+
+    function runMatch({ workbook, purchasedWorkbook, targetSheetName, purchasedSheetName, departmentRules }) {
       const target = readWorksheetRows(workbook, targetSheetName, ["Title", "O-Book ISBN13"]);
-      const purchased = readWorksheetRows(workbook, purchasedSheetName, ["O-ISBN_比對"]);
+      const purchased = readWorksheetRows(purchasedWorkbook, purchasedSheetName, ["O-ISBN_比對"]);
       const purchasedIndex = buildPurchasedIndex(purchased.rows);
       const outputRows = [];
       let purchasedCount = 0;

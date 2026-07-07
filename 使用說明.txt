@@ -6,10 +6,12 @@ Wiley 已購買與系所比對工具
 2. 上傳 Wiley 全庫 Excel，例如 Wiley全庫OnlineBooks_FullList_202601.xltx。
 3. 選擇待比對工作表，預設是 All Live。
 4. 選擇已購買工作表，預設是 TAEBDC複本202512。
-5. 輸入學校名稱。
-6. 上傳或貼上系所關鍵字 CSV，也可以先用「系所關鍵字範本.csv」測試。
-7. 按「開始比對並產生 Excel」。
-8. 下載比對結果 Excel。
+5. 如果已購買資料是另一個 Excel，可以在「已購買 Excel（選填）」另外上傳。
+6. 輸入學校名稱。
+7. 上傳或貼上系所關鍵字 CSV，也可以先用「系所關鍵字範本.csv」測試。
+8. 如果還沒有系所關鍵字 CSV，可用右側「複製 Prompt」按鈕，貼到 ChatGPT 或 Gemini 產生。
+9. 按「開始比對並產生 Excel」。
+10. 下載比對結果 Excel。
 
 輸出內容
 
@@ -28,6 +30,8 @@ Wiley 已購買與系所比對工具
 注意
 
 - 這是純 HTML 工具，不需要 Python、Docker、API Key 或本機服務。
+- 工具本身不會呼叫 AI API；AI 只用來事先產生可貼回工具的系所關鍵字 CSV。
 - Excel 會在瀏覽器本機處理，不會上傳到外部系統。
 - index.html 會從網路載入 Excel 元件，使用時需可連線到 CDN。
 - 可直接複製或修改「系所關鍵字範本.csv」。
+- 也可打開「AI產生系所關鍵字Prompt.txt」複製完整 Prompt。
