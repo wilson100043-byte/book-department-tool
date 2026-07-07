@@ -1,4 +1,4 @@
-# 已購買與系所比對工具
+# Wiley 已購買與系所比對工具
 
 這是純前端 GitHub Pages 小工具。使用者不需要安裝 Python、Docker、App，也不需要 API Key。
 
@@ -9,13 +9,13 @@
 3. 選擇待比對工作表，預設 `All Live`。
 4. 如果已購買資料在同一個 Excel，選擇已購買工作表，預設 `TAEBDC複本202512`。
 5. 如果已購買資料是另一個 Excel，可在「已購買 Excel（選填）」另外上傳。
-6. 輸入學校名稱。
+6. 輸入學校名稱、學校代碼、主題代碼、SDGs。
 7. 貼上該校系所或學院描述。
 8. 按「複製 AI 產生系所關鍵字 Prompt」。
 9. 把 Prompt 貼到 ChatGPT、Gemini 或其他 AI。
 10. 把 AI 回傳的 CSV 整段貼回「AI 回傳結果」。
 11. 按「開始比對並產生 Excel」。
-12. 下載結果 Excel。
+12. 下載比對結果 Excel 與系統上傳格式 Excel。
 
 ## AI 回傳格式
 
@@ -30,7 +30,11 @@ AI 必須只回傳 CSV，不要 Markdown、不要說明文字。
 
 ## 輸出
 
-輸出一個工作表：`全部比對結果`。
+工具會輸出兩個 Excel。
+
+### 比對結果 Excel
+
+工作表：`全部比對結果`
 
 原始欄位全部保留，只新增：
 
@@ -39,7 +43,30 @@ AI 必須只回傳 CSV，不要 Markdown、不要說明文字。
 
 輸出 Excel 會設定篩選箭頭，可在 Excel 中篩選 `是否已購買 = 未購買`。
 
-## Prompt 範本
+### 系統上傳格式 Excel
+
+工作表：`Tablib Dataset`
+
+只輸出 `未購買` 書目，欄位格式依舊工具的系統上傳格式：
+
+```text
+ID
+學校代碼
+主題代碼(全字母大寫)
+題名(可大寫可小寫)
+作者(可大寫可小寫)
+出版者(可大寫可小寫)
+出版年
+ISBN
+網址
+SDGs(數字前後一定要有逗號)
+主題(英文大小寫皆可，出版社主題若有逗號，請改為 &
+若有多主題以逗號區隔。)
+```
+
+其中 `學校代碼`、`主題代碼`、`SDGs` 由畫面欄位帶入。`主題代碼` 會轉成大寫，`SDGs` 格式需像 `,9,` 或 `,9,12,`。
+
+## 單一 Prompt 範本
 
 工具畫面會依照你輸入的學校名稱與系所描述自動產生完整 Prompt。下面是固定格式：
 
@@ -63,6 +90,21 @@ CSV 輸出規則：
 12. 如果一個學院描述是跨領域或新興學院，請依描述建立合理的系所或領域名稱，並產生對應關鍵字。
 ```
 
+## 部署到 GitHub Pages
+
+把這些檔案放到 GitHub repository：
+
+```text
+index.html
+README.md
+使用說明.txt
+系所關鍵字範本.csv
+AI產生系所關鍵字Prompt.txt
+```
+
+到 GitHub repository 的 `Settings > Pages` 啟用 GitHub Pages，即可用網址開啟。
+
+`index.html` 會從 CDN 載入 SheetJS Excel 元件，所以 repository 不需要放 `xlsx.full.min.js`。
 
 ## 隱私
 
