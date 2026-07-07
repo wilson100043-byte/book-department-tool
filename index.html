@@ -329,15 +329,28 @@
             <input id="schoolName" type="text" placeholder="淡江大學" required>
           </label>
 
-          <label>
-            <span>系所關鍵字 CSV</span>
-            <input id="keywordFile" type="file" accept=".csv,.txt">
-            <small>可上傳 CSV，或直接貼在下方文字框。</small>
+          <label class="wide">
+            <span>貼上學校系所描述（給 AI 用）</span>
+            <textarea id="sourceDepartmentText" placeholder="例如：商管學院：企業管理、財務金融、會計、國際企業、保險、經濟、統計與資料科學。工學院：建築、土木、水環、機械與機電、電機、航太、化材。"></textarea>
+            <small>把你手上的系所清單或自然語言描述貼在這裡，再按下方按鈕複製完整 Prompt。</small>
           </label>
 
           <label class="wide">
-            <span>貼上系所關鍵字 CSV</span>
-            <textarea id="keywordText" placeholder="學校名稱,系所名稱,關鍵字&#10;淡江大學,財務金融學系,財務金融;金融;投資;corporate finance;investment&#10;淡江大學,會計學系,會計;審計;accounting;auditing"></textarea>
+            <span>AI 產生用 Prompt</span>
+            <button id="copyPromptButton" class="secondary" type="button">複製 AI 產生系所關鍵字 Prompt</button>
+            <small>貼到 ChatGPT、Gemini 或其他 AI。AI 回傳後，把整段結果貼到下一格。</small>
+          </label>
+
+          <label class="wide">
+            <span>AI 回傳結果（CSV）</span>
+            <textarea id="keywordText" placeholder="學校名稱,系所名稱,關鍵字&#10;淡江大學,財務金融學系,財務金融;金融;投資;corporate finance;investment;portfolio;banking&#10;淡江大學,會計學系,會計;審計;稅務;accounting;auditing;taxation"></textarea>
+            <small>AI 回傳必須是 CSV。工具會直接解析這格並產生 Excel。</small>
+          </label>
+
+          <label class="wide">
+            <span>AI 回傳 CSV 檔（選填）</span>
+            <input id="keywordFile" type="file" accept=".csv,.txt">
+            <small>如果 AI 回傳結果另存成 CSV 或 txt，也可以在這裡上傳。</small>
           </label>
 
           <button id="submitButton" type="submit">開始比對並產生 Excel</button>
@@ -371,29 +384,25 @@
       </section>
 
       <aside class="panel">
-        <h2>系所關鍵字格式</h2>
+        <h2>操作流程</h2>
         <ul class="plain-list">
-          <li>欄位固定：學校名稱、系所名稱、關鍵字</li>
-          <li>關鍵字用半形分號 ; 分隔</li>
-          <li>同一本書可命中多個系所</li>
-          <li>輸出後可用 Excel 篩選箭頭篩「未購買」</li>
+          <li>先上傳書單與已購買清單</li>
+          <li>貼上系所描述並複製 Prompt</li>
+          <li>把 AI 回傳的 CSV 貼回工具</li>
+          <li>按開始後下載 Excel</li>
         </ul>
+        <div class="prompt-block">
+          <h2>AI 回傳格式</h2>
+          <ul class="plain-list">
+            <li>第一列固定：學校名稱、系所名稱、關鍵字</li>
+            <li>關鍵字用半形分號 ; 分隔</li>
+            <li>同一本書可命中多個系所</li>
+          </ul>
+        </div>
         <pre class="sample">學校名稱,系所名稱,關鍵字
 淡江大學,財務金融學系,財務金融;金融;投資;corporate finance;investment
 淡江大學,會計學系,會計;審計;稅務;accounting;auditing
 淡江大學,電機工程學系,電機;電子;半導體;electrical engineering;electronics</pre>
-        <div class="prompt-block">
-          <h2>AI 產生 CSV Prompt</h2>
-          <ul class="plain-list">
-            <li>先把系所清單丟給 ChatGPT 或 Gemini</li>
-            <li>要求只回 CSV，不要解釋文字</li>
-            <li>再貼回左側文字框</li>
-          </ul>
-          <div class="prompt-actions">
-            <button class="prompt-button" type="button" data-copy-prompt="department">複製系所清單整理 Prompt</button>
-            <button class="prompt-button" type="button" data-copy-prompt="keyword">複製系所關鍵字擴充 Prompt</button>
-          </div>
-        </div>
       </aside>
     </section>
   </main>
@@ -405,49 +414,12 @@
     const PURCHASED_ISBN_COLUMNS = ["O-ISBN_比對", "O-Book ISBN13", "E-Book ISBN13", "ISBN", "ISBN13"];
     const TEXT_COLUMNS = ["Title", "Main Subject Category", "Specialized Subject Area", "主題", "次主題"];
     const OUTPUT_ADDED_COLUMNS = ["是否已購買", "系所"];
-    const DEPARTMENT_PROMPT = `你是一位台灣大學系所資料整理助理。請把我提供的學校、學院、系所或自然語言描述，整理成可貼到書單比對工具的 CSV。
-
-輸出規則：
-1. 只輸出 CSV，不要 Markdown，不要說明文字。
-2. 第一列固定為：學校名稱,系所名稱,關鍵字
-3. 每一列只放一個系所。
-4. 學校名稱必須完全使用我指定的學校名稱。
-5. 系所名稱請使用完整正式名稱；如果我只給簡稱，請合理補成正式系所名稱。
-6. 關鍵字用半形分號 ; 分隔。
-7. 每個系所至少產生 8 個關鍵字，包含：
-   - 系所全名
-   - 常見簡稱
-   - 中文主題詞
-   - 相關英文學科詞
-   - Wiley 書目標題中可能出現的英文詞
-8. 不要加入我沒有指定學校的系所。
-9. 不要合併不同系所。
-
-我要整理的學校名稱：
-【在這裡填學校名稱，例如：淡江大學】
-
-我要整理的系所/學院描述：
-【在這裡貼上學院與系所清單，例如：商管學院：企業管理、財務金融、會計、國際企業、保險、經濟、統計與資料科學。】`;
-    const KEYWORD_PROMPT = `你是一位圖書館電子書選書與學科分類助理。請根據我提供的系所清單，為每個系所擴充可用於 Wiley 英文書目比對的關鍵字。
-
-輸出規則：
-1. 只輸出 CSV，不要 Markdown，不要說明文字。
-2. 第一列固定為：學校名稱,系所名稱,關鍵字
-3. 關鍵字用半形分號 ; 分隔。
-4. 每個系所至少產生 12 個關鍵字。
-5. 關鍵字要包含中文與英文。
-6. 英文關鍵字要包含學科正式名稱、常見書名詞、研究主題詞。
-7. 避免太廣泛的詞，例如 research、introduction、theory、practice、management 單獨使用時太泛者不要單獨列入，除非搭配具體領域。
-8. 不要加入其他學校的系所。
-9. 不要改變學校名稱與系所名稱。
-
-請依照以下資料產生：
-學校名稱,系所名稱
-【在這裡貼系所清單】`;
 
     const form = document.querySelector("#matchForm");
     const wileyFile = document.querySelector("#wileyFile");
     const purchasedFile = document.querySelector("#purchasedFile");
+    const sourceDepartmentText = document.querySelector("#sourceDepartmentText");
+    const copyPromptButton = document.querySelector("#copyPromptButton");
     const targetSheetSelect = document.querySelector("#targetSheet");
     const purchasedSheetSelect = document.querySelector("#purchasedSheet");
     const keywordFile = document.querySelector("#keywordFile");
@@ -461,17 +433,13 @@
     let purchasedWorkbook = null;
     let outputUrl = null;
 
-    document.querySelectorAll("[data-copy-prompt]").forEach((button) => {
-      button.addEventListener("click", async () => {
-        const promptType = button.getAttribute("data-copy-prompt");
-        const prompt = promptType === "department" ? DEPARTMENT_PROMPT : KEYWORD_PROMPT;
-        try {
-          await copyText(prompt);
-          showMessage("已複製 Prompt。請貼到 ChatGPT 或 Gemini，取得 CSV 後再貼回系所關鍵字欄位。", false);
-        } catch (error) {
-          showMessage("瀏覽器無法自動複製，請改用 README 或 Prompt 檔案中的文字。", true);
-        }
-      });
+    copyPromptButton.addEventListener("click", async () => {
+      try {
+        await copyText(buildAiPrompt());
+        showMessage("已複製完整 Prompt。請貼到 AI，回傳 CSV 後整段貼到「AI 回傳結果」。", false);
+      } catch (error) {
+        showMessage("瀏覽器無法自動複製，請改用 README 或 Prompt 檔案中的文字。", true);
+      }
     });
 
     wileyFile.addEventListener("change", async () => {
@@ -484,7 +452,7 @@
         if (!purchasedWorkbook) {
           populateSelect(purchasedSheetSelect, wileyWorkbook.SheetNames, DEFAULT_PURCHASED_SHEET);
         }
-        showMessage("Excel 已載入完成。下一步請確認工作表、輸入學校名稱、貼上系所關鍵字 CSV，然後按「開始比對並產生 Excel」。", false);
+        showMessage("Excel 已載入完成。下一步請輸入學校名稱、貼上系所描述、複製 Prompt 給 AI。", false);
       } catch (error) {
         wileyWorkbook = null;
         showMessage(error.message || "Excel 讀取失敗。", true);
@@ -514,7 +482,7 @@
       if (!file) return;
       try {
         keywordText.value = await readTextFile(file);
-        showMessage("系所關鍵字 CSV 已載入完成。確認學校名稱後即可開始比對。", false);
+        showMessage("AI 回傳 CSV 已載入完成。確認學校名稱後即可開始比對。", false);
       } catch (error) {
         showMessage(error.message || "CSV 讀取失敗。", true);
       }
@@ -545,7 +513,7 @@
         if (!schoolName) throw new Error("請輸入學校名稱。");
         const departmentRules = parseDepartmentRules(keywordText.value, schoolName);
         if (!departmentRules.length) {
-          throw new Error(`系所關鍵字 CSV 找不到「${schoolName}」的資料。`);
+          throw new Error(`AI 回傳結果找不到「${schoolName}」的資料，請確認 CSV 的學校名稱是否一致。`);
         }
 
         const conversion = runMatch({
@@ -613,6 +581,40 @@
       const ok = document.execCommand("copy");
       textarea.remove();
       if (!ok) throw new Error("copy failed");
+    }
+
+    function buildAiPrompt() {
+      const schoolName = cleanText(document.querySelector("#schoolName").value) || "【請填入學校名稱】";
+      const departmentDescription = cleanText(sourceDepartmentText.value) || "【請貼上學院、系所清單或自然語言描述】";
+      return `你是一位圖書館電子書選書與學科分類助理。請把我提供的學校系所描述，整理成可貼回書單比對工具的 CSV，並同時為每個系所產生適合 Wiley 英文書目比對的關鍵字。
+
+重要：請只輸出 CSV，不要 Markdown，不要程式碼區塊，不要任何說明文字。
+
+CSV 輸出規則：
+1. 第一列固定為：學校名稱,系所名稱,關鍵字
+2. 每一列只放一個系所。
+3. 學校名稱必須完全使用：${schoolName}
+4. 系所名稱請使用完整正式名稱；如果我只給簡稱，請合理補成正式系所名稱。
+5. 關鍵字用半形分號 ; 分隔，不要用逗號分隔關鍵字。
+6. 每個系所至少產生 12 個關鍵字。
+7. 關鍵字要包含中文與英文。
+8. 英文關鍵字要包含：
+   - 學科正式名稱
+   - 常見書名詞
+   - 研究主題詞
+   - Wiley 書目標題或主題分類可能出現的詞
+9. 避免太廣泛的單詞，例如 research、introduction、theory、practice、management 不要單獨列入，除非和具體領域組成片語。
+10. 不要加入其他學校的系所。
+11. 不要合併不同系所。
+12. 如果一個學院描述是跨領域或新興學院，請依描述建立合理的系所或領域名稱，並產生對應關鍵字。
+
+學校名稱：
+${schoolName}
+
+系所/學院描述：
+${departmentDescription}
+
+請直接輸出 CSV。`;
     }
 
     function runMatch({ workbook, purchasedWorkbook, targetSheetName, purchasedSheetName, departmentRules }) {
@@ -703,7 +705,7 @@
 
     function parseDepartmentRules(csvText, schoolName) {
       const text = cleanText(csvText);
-      if (!text) throw new Error("請上傳或貼上系所關鍵字 CSV。");
+      if (!text) throw new Error("請先把 AI 回傳的 CSV 貼到「AI 回傳結果」。");
       const rows = parseCsvRows(text);
       return rows
         .map((row) => ({
@@ -716,11 +718,11 @@
 
     function parseCsvRows(text) {
       const lines = text.split(/\r?\n/).filter((line) => cleanText(line));
-      if (lines.length < 2) throw new Error("系所關鍵字 CSV 至少要有標題列與一筆資料。");
+      if (lines.length < 2) throw new Error("AI 回傳結果至少要有標題列與一筆資料。");
       const headers = parseCsvLine(lines[0]).map(cleanText);
       const requiredHeaders = ["學校名稱", "系所名稱", "關鍵字"];
       const missingHeaders = requiredHeaders.filter((header) => !headers.includes(header));
-      if (missingHeaders.length) throw new Error(`系所關鍵字 CSV 缺少欄位：${missingHeaders.join("、")}`);
+      if (missingHeaders.length) throw new Error(`AI 回傳結果缺少欄位：${missingHeaders.join("、")}。請確認 AI 只回傳 CSV，第一列是：學校名稱,系所名稱,關鍵字`);
 
       return lines.slice(1).map((line) => {
         const values = parseCsvLine(line);
